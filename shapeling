@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shapelings</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@700;900&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#111827;overflow:hidden;width:100vw;height:100vh;display:flex;flex-direction:column;font-family:'Nunito',sans-serif}
+
+/* TOP BAR */
+#bar{display:flex;align-items:center;gap:16px;padding:8px 16px;background:#1f2937;border-bottom:2px solid #374151;flex-shrink:0;z-index:10}
+#logo{font-family:'Fredoka One',cursive;font-size:1.4rem;background:linear-gradient(120deg,#f87171,#fbbf24,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
+#meter-wrap{flex:1;max-width:280px;display:flex;align-items:center;gap:8px}
+#meter-label{font-size:.75rem;color:#6b7280;white-space:nowrap}
+#meter-bg{flex:1;height:10px;background:#374151;border-radius:5px;overflow:hidden}
+#meter-fill{height:100%;width:0%;background:linear-gradient(90deg,#34d399,#a3e635);border-radius:5px;transition:width .3s}
+#meter-pct{font-size:.8rem;font-weight:700;color:#a3e635;min-width:32px}
+#count{font-size:.8rem;color:#6b7280;margin-left:auto}
+#count b{color:#e5e7eb}
+
+/* SHAPE SELECTOR */
+#selector{display:flex;gap:6px;margin-left:8px}
+.sbtn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 10px;border-radius:12px;border:2px solid transparent;background:#111827;cursor:pointer;transition:all .15s;color:#9ca3af;font-family:'Fredoka One',cursive;font-size:.7rem}
+.sbtn:hover{background:#374151}
+.sbtn.on{border-color:#fbbf24;background:#374151;color:#fbbf24;box-shadow:0 0 10px rgba(251,191,36,.2)}
+.sbtn canvas{display:block}
+
+/* CANVAS */
+#gc{flex:1;display:block;cursor:crosshair;touch-action:none}
+
+/* WIN OVERLAY */
+#win{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:100;gap:20px;backdrop-filter:blur(8px)}
+#win.show{display:flex}
+#win-title{font-family:'Fredoka One',cursive;font-size:3.5rem;text-align:center;line-height:1.1;color:#ffffff;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{filter:brightness(1) drop-shadow(0 0 16px rgba(255,255,255,.4))}50%{filter:brightness(1.2) drop-shadow(0 0 32px rgba(255,255,255,.85))}}
+#win-sub{font-size:1rem;color:#9ca3af;text-align:center;max-width:300px;line-height:1.6}
+#win-btn{padding:14px 44px;border-radius:50px;border:none;background:linear-gradient(135deg,#f87171,#fbbf24);color:#111;font-family:'Fredoka One',cursive;font-size:1.3rem;cursor:pointer;transition:transform .15s}
+#win-btn:hover{transform:scale(1.07)}
+#confetti-stage{position:fixed;inset:0;pointer-events:none;z-index:99}
+
+/* HINT */
+#hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(31,41,55,.95);border:1px solid #374151;border-radius:20px;padding:6px 16px;font-size:.78rem;color:#6b7280;pointer-events:none;z-index:5;transition:opacity .4s}
+#hint b{color:#e5e7eb}
+
+/* TIMER */
+#timer-wrap{display:flex;align-items:center;gap:6px;margin-left:8px}
+#timer-label{font-size:.75rem;color:#6b7280}
+#timer-display{font-family:'Fredoka One',cursive;font-size:1.2rem;color:#e5e7eb;min-width:44px}
+#timer-display.urgent{color:#f87171;animation:blink .6s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* LOSE OVERLAY */
+#lose{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:100;gap:20px;backdrop-filter:blur(8px)}
+#lose.show{display:flex}
+#lose-title{font-family:'Fredoka One',cursive;font-size:3.5rem;color:#f87171;text-align:center;line-height:1.1}
+#lose-sub{font-size:1rem;color:#9ca3af;text-align:center;max-width:300px;line-height:1.6}
+#lose-btn{padding:14px 44px;border-radius:50px;border:none;background:linear-gradient(135deg,#6b7280,#9ca3af);color:#111;font-family:'Fredoka One',cursive;font-size:1.3rem;cursor:pointer;transition:transform .15s}
+#lose-btn:hover{transform:scale(1.07)}
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <div id="logo">✦ Shapelings</div>
+
+  <div id="meter-wrap">
+    <div id="meter-label">Filled</div>
+    <div id="meter-bg"><div id="meter-fill"></div></div>
+    <div id="meter-pct">0%</div>
+  </div>
+
+  <div id="selector">
+    <button class="sbtn on" data-s="circle" onclick="pick('circle')">
+      <canvas id="ic-circle" width="36" height="36"></canvas>circle
+    </button>
+    <button class="sbtn" data-s="square" onclick="pick('square')">
+      <canvas id="ic-square" width="36" height="36"></canvas>square
+    </button>
+    <button class="sbtn" data-s="triangle" onclick="pick('triangle')">
+      <canvas id="ic-triangle" width="36" height="36"></canvas>triangle
+    </button>
+    <button class="sbtn" data-s="star" onclick="pick('star')">
+      <canvas id="ic-star" width="36" height="36"></canvas>star
+    </button>
+  </div>
+
+  <div id="count"><b id="cn">0</b> shapelings</div>
+  <div id="timer-wrap">
+    <div id="timer-label">Time</div>
+    <div id="timer-display">2:00</div>
+  </div>
+</div>
+
+<canvas id="gc"></canvas>
+<canvas id="confetti-stage"></canvas>
+
+<div id="win">
+  <div id="win-title">🎉 You Did It!</div>
+  <div id="win-sub">Your Shapelings have taken over the world.<br>The ecosystem is ALIVE!</div>
+  <button id="win-btn" onclick="resetGame()">Play Again ↺</button>
+</div>
+
+<div id="lose">
+  <div id="lose-title">⏰ Time's Up!</div>
+  <div id="lose-sub">You filled <span id="lose-pct">0</span>% — so close!<br>Try again and click faster!</div>
+  <button id="lose-btn" onclick="resetGame()">Try Again ↺</button>
+</div>
+
+<div id="hint">Click anywhere on the canvas to spawn a Shapeling!</div>
+
+<script>
+// ═══════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════
+const WIN_COVERAGE = 80;   // % to trigger win
+const MAX_SIZE     = 90;   // radius at which character BURSTS
+const MERGE_DIST   = 0.82; // fraction of combined radii to trigger merge
+
+const PALETTE = {
+  circle:   '#f87171',
+  square:   '#fbbf24',
+  triangle: '#60a5fa',
+  star:     '#c084fc',
+};
+
+// ═══════════════════════════════════════════
+//  CANVAS SETUP
+// ═══════════════════════════════════════════
+const gc  = document.getElementById('gc');
+const ctx = gc.getContext('2d');
+
+function resize(){
+  gc.width  = gc.offsetWidth;
+  gc.height = gc.offsetHeight;
+  const cs = document.getElementById('confetti-stage');
+  cs.width  = window.innerWidth;
+  cs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ═══════════════════════════════════════════
+//  ICON BUTTONS
+// ═══════════════════════════════════════════
+function drawIcon(id, type){
+  const c = document.getElementById(id).getContext('2d');
+  c.clearRect(0,0,36,36);
+  c.fillStyle = PALETTE[type];
+  c.strokeStyle = PALETTE[type];
+  c.lineWidth = 2.5;
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  switch(type){
+    case 'circle':
+      c.beginPath(); c.arc(18,18,12,0,Math.PI*2); c.fill(); break;
+    case 'square':
+      c.beginPath(); c.roundRect(6,6,24,24,4); c.fill(); break;
+    case 'triangle':
+      c.beginPath(); c.moveTo(18,5); c.lineTo(31,30); c.lineTo(5,30); c.closePath(); c.fill(); break;
+    case 'star':
+      c.beginPath();
+      for(let i=0;i<5;i++){
+        const a1 = Math.PI/2*3 + (Math.PI/5)*2*i;
+        const a2 = a1 + Math.PI/5;
+        if(i===0) c.moveTo(18+Math.cos(a1)*13, 18+Math.sin(a1)*13);
+        else c.lineTo(18+Math.cos(a1)*13, 18+Math.sin(a1)*13);
+        c.lineTo(18+Math.cos(a2)*6, 18+Math.sin(a2)*6);
+      }
+      c.closePath(); c.fill(); break;
+  }
+}
+['circle','square','triangle','star'].forEach(t => drawIcon('ic-'+t, t));
+
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+let chars      = [];
+let parts      = [];   // burst/spawn particles
+let drawPath   = [];
+let drawing    = false;
+let selected   = 'circle';
+let frame      = 0;
+let coverage   = 0;
+let won        = false;
+let timerDone  = false;
+let timeLeft   = 120; // seconds
+let lastTick   = null;
+let confettiPieces = [];
+
+function pick(s){
+  selected = s;
+  document.querySelectorAll('.sbtn').forEach(b=>b.classList.remove('on'));
+  document.querySelector(`[data-s="${s}"]`).classList.add('on');
+}
+
+// ═══════════════════════════════════════════
+//  SHAPELING CLASS
+// ═══════════════════════════════════════════
+class Shapeling {
+  constructor(type, x, y, r){
+    this.type  = type;
+    this.x     = x;
+    this.y     = y;
+    this.r     = r || 22;
+    this.dead  = false;
+    this.spawnT= 0;   // 0→1 pop-in
+    this.mergeFlash = 0;
+    this.mergeCount = 0;  // collisions survived; bursts at 4
+    this.anim  = Math.random()*200;
+    this.eyeT  = Math.random()*200;
+    this.blinkAt = 80 + Math.random()*120;
+    this.sqX = 1; this.sqY = 1;  // squash-stretch
+
+    const baseSpeed = { circle:1.4, square:0.85, triangle:2.4, star:1.9 };
+    const sp = (baseSpeed[type]||1.4) / Math.pow(this.r/22, 0.5);
+    const a = Math.random()*Math.PI*2;
+    this.vx = Math.cos(a)*sp;
+    this.vy = Math.sin(a)*sp;
+  }
+
+  get color(){ return PALETTE[this.type]; }
+  get dr(){ return this.r * Math.min(this.spawnT, 1); }  // display radius
+
+  update(){
+    if(this.dead) return;
+    this.anim++;
+    this.eyeT++;
+    if(this.spawnT < 1) this.spawnT += 0.07;
+
+    this.x += this.vx;
+    this.y += this.vy;
+
+    // Wall bounce
+    const r = this.dr;
+    if(this.x-r < 0)            { this.x=r;             this.vx=Math.abs(this.vx);  this._bounce('h'); }
+    if(this.x+r > gc.width)     { this.x=gc.width-r;    this.vx=-Math.abs(this.vx); this._bounce('h'); }
+    if(this.y-r < 0)            { this.y=r;             this.vy=Math.abs(this.vy);  this._bounce('v'); }
+    if(this.y+r > gc.height)    { this.y=gc.height-r;   this.vy=-Math.abs(this.vy); this._bounce('v'); }
+
+    // Type quirk
+    if(this.type==='triangle' && Math.random()<0.018){
+      const a = Math.atan2(this.vy,this.vx) + (Math.random()-.5)*.9;
+      const sp = Math.hypot(this.vx,this.vy);
+      this.vx=Math.cos(a)*sp; this.vy=Math.sin(a)*sp;
+    }
+    if(this.type==='circle') this.vy += Math.sin(this.anim*.05)*.025;
+
+    // Circle type nudge stays bounded
+    const maxSp = 4;
+    const sp = Math.hypot(this.vx,this.vy);
+    if(sp>maxSp){ this.vx=this.vx/sp*maxSp; this.vy=this.vy/sp*maxSp; }
+
+    // Squash decay
+    this.sqX += (1-this.sqX)*.16;
+    this.sqY += (1-this.sqY)*.16;
+    if(this.mergeFlash>0) this.mergeFlash-=.04;
+  }
+
+  _bounce(axis){
+    if(axis==='v'){ this.sqY=.5; this.sqX=1.5; }
+    else          { this.sqX=.5; this.sqY=1.5; }
+  }
+
+  draw(){
+    if(this.dead) return;
+    const r = this.dr; if(r<1) return;
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.scale(this.sqX, this.sqY);
+
+    if(this.mergeFlash>0){
+      ctx.shadowColor='#fff';
+      ctx.shadowBlur = 18*this.mergeFlash;
+    }
+
+    // Slight wobble for star/circle
+    const wobble = (this.type==='circle'||this.type==='star') ? Math.sin(this.anim*.07)*.04 : 0;
+    ctx.rotate(wobble);
+
+    this._drawShape(r);
+    ctx.shadowBlur=0;
+    this._drawEyes(r);
+    this._drawPips(r);
+    ctx.restore();
+  }
+
+  _drawShape(r){
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    switch(this.type){
+      case 'circle':
+        ctx.arc(0, 0, r, 0, Math.PI*2);
+        break;
+      case 'square':{
+        const s=r*1.7, rad=r*.18;
+        ctx.roundRect(-s/2,-s/2,s,s,rad);
+        break;
+      }
+      case 'triangle':
+        ctx.moveTo(0,-r*1.1);
+        ctx.lineTo(r*.95, r*.85);
+        ctx.lineTo(-r*.95, r*.85);
+        ctx.closePath();
+        break;
+      case 'star':
+        for(let i=0;i<5;i++){
+          const a1=Math.PI/2*3+(Math.PI/5)*2*i;
+          const a2=a1+Math.PI/5;
+          if(i===0) ctx.moveTo(Math.cos(a1)*r, Math.sin(a1)*r);
+          else      ctx.lineTo(Math.cos(a1)*r, Math.sin(a1)*r);
+          ctx.lineTo(Math.cos(a2)*r*.45, Math.sin(a2)*r*.45);
+        }
+        ctx.closePath();
+        break;
+    }
+    ctx.fill();
+
+    // Highlight
+    ctx.fillStyle='rgba(255,255,255,.18)';
+    ctx.beginPath();
+    ctx.arc(-r*.28,-r*.28,r*.28,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  _drawEyes(r){
+    const eyeR   = Math.max(r*.2, 3.5);
+    const blink  = (this.eyeT % this.blinkAt < 5) ? .12 : 1;
+    const eOffX  = r*.38, eOffY = -r*.1;
+
+    ctx.fillStyle='rgba(255,255,255,.95)';
+    ctx.beginPath(); ctx.ellipse(-eOffX,eOffY,eyeR,eyeR*blink,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse( eOffX,eOffY,eyeR,eyeR*blink,0,0,Math.PI*2); ctx.fill();
+
+    if(blink>.4){
+      ctx.fillStyle='#111';
+      ctx.beginPath(); ctx.arc(-eOffX+1,eOffY+1,eyeR*.5,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc( eOffX+1,eOffY+1,eyeR*.5,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#fff';
+      ctx.beginPath(); ctx.arc(-eOffX+2,eOffY-1,eyeR*.16,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc( eOffX+2,eOffY-1,eyeR*.16,0,Math.PI*2); ctx.fill();
+    }
+  }
+
+  // 4 small dots at the bottom showing merge progress
+  _drawPips(r){
+    const total = 4;
+    const pipR  = Math.max(r*.09, 2.5);
+    const gap   = pipR*2.6;
+    const startX= -gap*(total-1)/2;
+    const py    = r*.72;
+    for(let i=0;i<total;i++){
+      ctx.beginPath();
+      ctx.arc(startX + i*gap, py, pipR, 0, Math.PI*2);
+      if(i < this.mergeCount){
+        // filled — hit taken
+        ctx.fillStyle = '#fff';
+        ctx.globalAlpha = 0.9;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      } else {
+        // empty — remaining
+        ctx.strokeStyle = 'rgba(255,255,255,.35)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════
+//  PARTICLES
+// ═══════════════════════════════════════════
+function burst(x,y,color,count=14){
+  for(let i=0;i<count;i++){
+    const a=(Math.PI*2/count)*i+Math.random()*.5;
+    const sp=2+Math.random()*4;
+    parts.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,r:3+Math.random()*5,life:1,color});
+  }
+}
+
+function updateParts(){
+  parts=parts.filter(p=>p.life>0);
+  parts.forEach(p=>{
+    p.x+=p.vx; p.y+=p.vy;
+    p.vx*=.90; p.vy*=.90;
+    p.life-=.035; p.r*=.97;
+  });
+}
+function drawParts(){
+  parts.forEach(p=>{
+    ctx.globalAlpha=p.life*.8;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle=p.color; ctx.fill();
+  });
+  ctx.globalAlpha=1;
+}
+
+// ═══════════════════════════════════════════
+//  SPAWN
+// ═══════════════════════════════════════════
+function spawn(type,x,y,r,suppressBurst){
+  const s = new Shapeling(type,x,y,r);
+  chars.push(s);
+  if(!suppressBurst) burst(x,y,PALETTE[type]);
+  return s;
+}
+
+// ═══════════════════════════════════════════
+//  MERGE + BURST LOGIC
+// ═══════════════════════════════════════════
+function checkCollisions(){
+  const n=chars.length;
+  for(let i=0;i<n;i++){
+    for(let j=i+1;j<n;j++){
+      const a=chars[i], b=chars[j];
+      if(a.dead||b.dead) continue;
+      if(a.type!==b.type) continue;
+
+      const dx=a.x-b.x, dy=a.y-b.y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist < (a.dr+b.dr)*MERGE_DIST){
+        doMerge(a,b);
+        return;
+      }
+    }
+  }
+}
+
+function doMerge(a,b){
+  // Each shapeling tracks how many same-type hits it has taken.
+  // At hit #4 it SPLITS into 3 smaller pieces. Until then it just grows a little.
+  const BURST_AT = 4;
+  const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+
+  // Push them apart slightly so they don't re-trigger next frame
+  const dx=a.x-b.x||0.1, dy=a.y-b.y||0.1;
+  const len=Math.sqrt(dx*dx+dy*dy)||1;
+  const sep=4;
+  a.x+=dx/len*sep; a.y+=dy/len*sep;
+  b.x-=dx/len*sep; b.y-=dy/len*sep;
+
+  // Increment hit counters
+  a.mergeCount++;
+  b.mergeCount++;
+
+  // Grow each one a bit
+  a.r = Math.min(a.r + 6, MAX_SIZE);
+  b.r = Math.min(b.r + 6, MAX_SIZE);
+  a.mergeFlash = 1.0;
+  b.mergeFlash = 1.0;
+  a._bounce('h'); b._bounce('v');
+  burst(mx, my, PALETTE[a.type], 6);
+
+  // Below 50% coverage → split; at/above 50% → burst
+  const splitMode = coverage < 50;
+  if(a.mergeCount >= BURST_AT){ splitMode ? doSplit(a) : doBurst(a); }
+  if(b.mergeCount >= BURST_AT){ splitMode ? doSplit(b) : doBurst(b); }
+}
+
+function doSplit(s){
+  s.dead = true;
+  const kids = 3;
+  const childR = Math.max(s.r * 0.48, 14);
+  for(let i=0;i<kids;i++){
+    const a = (Math.PI*2/kids)*i + Math.random()*0.4;
+    const dist = s.r * 0.9;
+    const cx = Math.max(childR, Math.min(gc.width-childR,  s.x + Math.cos(a)*dist));
+    const cy = Math.max(childR, Math.min(gc.height-childR, s.y + Math.sin(a)*dist));
+    const child = spawn(s.type, cx, cy, childR, true);
+    const sp = 2.2 + Math.random();
+    child.vx = Math.cos(a) * sp;
+    child.vy = Math.sin(a) * sp;
+    child.spawnT = 0.3;
+    child.mergeCount = 0;
+  }
+  burst(s.x, s.y, PALETTE[s.type], 10);
+}
+
+function doBurst(s){
+  s.dead = true;
+  burst(s.x, s.y, PALETTE[s.type], 28);
+}
+
+
+
+// ═══════════════════════════════════════════
+//  CLICK INPUT — click/tap to spawn
+// ═══════════════════════════════════════════
+function pos(e){
+  const rect=gc.getBoundingClientRect();
+  const src=e.touches?e.touches[0]:e;
+  return{x:src.clientX-rect.left, y:src.clientY-rect.top};
+}
+
+function handleClick(e){
+  if(won||timerDone) return;
+  const p=pos(e);
+  spawn(selected, p.x, p.y, 22);
+  hideHint();
+}
+
+gc.addEventListener('click', handleClick);
+gc.addEventListener('touchend', e=>{e.preventDefault(); handleClick(e.changedTouches[0]||e);},{passive:false});
+
+// (no stroke preview needed — shapes appear on click)
+
+// ═══════════════════════════════════════════
+//  COVERAGE
+// ═══════════════════════════════════════════
+function calcCoverage(){
+  const step=20;
+  let covered=0,total=0;
+  for(let px=0;px<gc.width;px+=step){
+    for(let py=0;py<gc.height;py+=step){
+      total++;
+      for(const c of chars){
+        if(c.dead)continue;
+        const dx=px-c.x,dy=py-c.y;
+        if(dx*dx+dy*dy < c.dr*c.dr*1.15){ covered++;break; }
+      }
+    }
+  }
+  coverage=Math.min(100,Math.round(covered/total*100));
+}
+
+// ═══════════════════════════════════════════
+//  WIN
+// ═══════════════════════════════════════════
+function triggerWin(){
+  won=true;
+  document.getElementById('win').classList.add('show');
+  launchConfetti();
+}
+
+function resetGame(){
+  chars=[]; parts=[]; won=false; timerDone=false; coverage=0; confettiPieces=[];
+  timeLeft=120; lastTick=null;
+  document.getElementById('win').classList.remove('show');
+  document.getElementById('lose').classList.remove('show');
+  document.getElementById('meter-fill').style.width='0%';
+  document.getElementById('meter-pct').textContent='0%';
+  document.getElementById('timer-display').textContent='2:00';
+  document.getElementById('timer-display').classList.remove('urgent');
+  seedInitial();
+}
+
+// ═══════════════════════════════════════════
+//  CONFETTI
+// ═══════════════════════════════════════════
+const cstage = document.getElementById('confetti-stage');
+const cctx   = cstage.getContext('2d');
+const CONFETTI_COLORS=['#f87171','#fbbf24','#34d399','#60a5fa','#c084fc','#fb923c','#a3e635'];
+
+function launchConfetti(){
+  confettiPieces=[];
+  for(let i=0;i<180;i++){
+    confettiPieces.push({
+      x:Math.random()*cstage.width,
+      y:-10-Math.random()*cstage.height*.5,
+      vx:(Math.random()-.5)*4,
+      vy:2+Math.random()*4,
+      rot:Math.random()*360,
+      rotV:(Math.random()-.5)*8,
+      w:8+Math.random()*8,
+      h:4+Math.random()*5,
+      color:CONFETTI_COLORS[Math.floor(Math.random()*CONFETTI_COLORS.length)],
+      life:1
+    });
+  }
+}
+
+function updateConfetti(){
+  if(!confettiPieces.length) return;
+  cctx.clearRect(0,0,cstage.width,cstage.height);
+  confettiPieces=confettiPieces.filter(c=>c.y<cstage.height+20);
+  confettiPieces.forEach(c=>{
+    c.x+=c.vx; c.y+=c.vy; c.rot+=c.rotV;
+    cctx.save();
+    cctx.translate(c.x,c.y); cctx.rotate(c.rot*Math.PI/180);
+    cctx.globalAlpha=Math.min(1,(cstage.height-c.y)/120);
+    cctx.fillStyle=c.color;
+    cctx.fillRect(-c.w/2,-c.h/2,c.w,c.h);
+    cctx.restore();
+  });
+}
+
+// ═══════════════════════════════════════════
+//  HUD + HINT
+// ═══════════════════════════════════════════
+let hintGone=false;
+function hideHint(){
+  if(hintGone) return; hintGone=true;
+  setTimeout(()=>{
+    const h=document.getElementById('hint');
+    h.style.opacity='0';
+    setTimeout(()=>h.style.display='none',500);
+  },1800);
+}
+
+function updateHUD(now){
+  const alive=chars.filter(c=>!c.dead).length;
+  document.getElementById('cn').textContent=alive;
+  document.getElementById('meter-fill').style.width=coverage+'%';
+  document.getElementById('meter-pct').textContent=coverage+'%';
+
+  // Timer tick
+  if(!won && !timerDone){
+    if(lastTick===null) lastTick=now;
+    const elapsed=(now-lastTick)/1000;
+    lastTick=now;
+    timeLeft=Math.max(0, timeLeft-elapsed);
+    const mins=Math.floor(timeLeft/60);
+    const secs=Math.floor(timeLeft%60);
+    const td=document.getElementById('timer-display');
+    td.textContent=mins+':'+(secs<10?'0':'')+secs;
+    td.classList.toggle('urgent', timeLeft<=20);
+    if(timeLeft<=0){ triggerLose(); return; }
+  }
+
+  if(coverage>=WIN_COVERAGE && !won) triggerWin();
+}
+
+function triggerLose(){
+  timerDone=true;
+  document.getElementById('lose-pct').textContent=coverage;
+  document.getElementById('lose').classList.add('show');
+}
+
+// ═══════════════════════════════════════════
+//  BACKGROUND
+// ═══════════════════════════════════════════
+function drawBG(){
+  ctx.fillStyle='#111827';
+  ctx.fillRect(0,0,gc.width,gc.height);
+  ctx.strokeStyle='rgba(255,255,255,.025)';
+  ctx.lineWidth=1;
+  const g=44;
+  for(let x=0;x<gc.width;x+=g){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,gc.height);ctx.stroke();}
+  for(let y=0;y<gc.height;y+=g){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(gc.width,y);ctx.stroke();}
+}
+
+// ═══════════════════════════════════════════
+//  SEED
+// ═══════════════════════════════════════════
+function seedInitial(){
+  const types=['circle','square','triangle','star','circle','square','triangle','star'];
+  types.forEach(t=>{
+    const x=80+Math.random()*(gc.width-160);
+    const y=80+Math.random()*(gc.height-160);
+    spawn(t,x,y,18+Math.random()*10,true);
+  });
+}
+
+// ═══════════════════════════════════════════
+//  MAIN LOOP
+// ═══════════════════════════════════════════
+function loop(now){
+  frame++;
+  drawBG();
+
+  chars.forEach(c=>c.update());
+  if(frame%2===0 && !won && !timerDone) checkCollisions();
+  if(frame%120===0) chars=chars.filter(c=>!c.dead);
+
+  chars.forEach(c=>c.draw());
+  updateParts(); drawParts();
+  updateConfetti();
+
+  if(frame%45===0){ calcCoverage(); updateHUD(now); }
+
+  requestAnimationFrame(loop);
+}
+
+setTimeout(()=>{ seedInitial(); loop(); },80);
+</script>
+</body>
+</html>
