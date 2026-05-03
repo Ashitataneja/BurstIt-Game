@@ -108,7 +108,7 @@ html, body {
 /* Hand tracking overlay canvas */
 #hand-canvas {
   position:fixed; inset:0; width:100%; height:100%;
-  z-index:3; pointer-events:none; transform:scaleX(-1);
+  z-index:3; pointer-events:none;
 }
 
 /* ─── HUD ───────────────────────────── */
@@ -644,23 +644,25 @@ const HAND_CONNECTIONS = [
 function drawHandSkeleton(landmarks) {
   hctx.save();
   // Draw connections
+  // Video has CSS transform:scaleX(-1), so landmarks x=0 is on the RIGHT of screen.
+  // We flip: screenX = (1 - lm.x) * width to match what the user sees.
   HAND_CONNECTIONS.forEach(([a,b]) => {
     const la = landmarks[a], lb = landmarks[b];
-    const ax = (1-la.x)*handCanvas.width,  ay = la.y*handCanvas.height;
-    const bx = (1-lb.x)*handCanvas.width,  by = lb.y*handCanvas.height;
+    const ax = (1 - la.x) * handCanvas.width,  ay = la.y * handCanvas.height;
+    const bx = (1 - lb.x) * handCanvas.width,  by = lb.y * handCanvas.height;
     hctx.beginPath();
-    hctx.moveTo(ax,ay); hctx.lineTo(bx,by);
-    hctx.strokeStyle = 'rgba(167,139,250,.55)';
-    hctx.lineWidth   = 2;
+    hctx.moveTo(ax, ay); hctx.lineTo(bx, by);
+    hctx.strokeStyle = 'rgba(167,139,250,.65)';
+    hctx.lineWidth   = 2.5;
     hctx.stroke();
   });
   // Draw landmark dots
-  landmarks.forEach((lm,i) => {
-    const x = (1-lm.x)*handCanvas.width;
-    const y = lm.y*handCanvas.height;
+  landmarks.forEach((lm, i) => {
+    const x = (1 - lm.x) * handCanvas.width;
+    const y = lm.y * handCanvas.height;
     hctx.beginPath();
-    hctx.arc(x, y, i===4||i===8 ? 8 : 4, 0, Math.PI*2);
-    hctx.fillStyle = (i===4||i===8) ? '#f472b6' : 'rgba(255,255,255,.7)';
+    hctx.arc(x, y, i===4||i===8 ? 9 : 4, 0, Math.PI*2);
+    hctx.fillStyle = (i===4||i===8) ? '#f472b6' : 'rgba(255,255,255,.8)';
     hctx.fill();
   });
   hctx.restore();
@@ -782,7 +784,7 @@ function pickNewTarget() {
 // ═══════════════════════════════════════════════════════
 function spawnObject() {
   const item = state.items[Math.floor(Math.random() * state.items.length)];
-  const size = 52 + Math.random() * 24; // 52–76px
+  const size = 72 + Math.random() * 28; // 72–100px — large and legible
 
   state.objects.push({
     id:       Math.random(),
@@ -923,40 +925,13 @@ function drawObject(obj) {
   gctx.translate(obj.x, obj.y);
   gctx.scale(obj.scale, obj.scale);
 
-  const r     = obj.size / 2;
-  const isTarget = obj.item.id === state.target.id;
-
-  // Glow ring for matching objects
-  if (isTarget && !obj.dying) {
-    gctx.beginPath();
-    gctx.arc(0, 0, r + 8, 0, Math.PI*2);
-    gctx.fillStyle = 'rgba(167,139,250,.12)';
-    gctx.fill();
-    gctx.beginPath();
-    gctx.arc(0, 0, r + 6, 0, Math.PI*2);
-    gctx.strokeStyle = 'rgba(167,139,250,.5)';
-    gctx.lineWidth   = 2;
-    gctx.stroke();
-  }
-
-  // Pill background
-  gctx.beginPath();
-  gctx.arc(0, 0, r, 0, Math.PI*2);
-  gctx.fillStyle = isTarget
-    ? 'rgba(167,139,250,.22)'
-    : 'rgba(255,255,255,.08)';
-  gctx.fill();
-  gctx.strokeStyle = isTarget
-    ? 'rgba(167,139,250,.45)'
-    : 'rgba(255,255,255,.12)';
-  gctx.lineWidth = 1.5;
-  gctx.stroke();
-
-  // Emoji
-  gctx.font      = `${obj.size * 0.55}px serif`;
-  gctx.textAlign = 'center';
+  // Draw emoji large and crisp — no background circle, no highlight
+  // Use a large font size relative to the object size for clarity
+  const fontSize = Math.round(obj.size * 0.85);
+  gctx.font = `${fontSize}px serif`;
+  gctx.textAlign    = 'center';
   gctx.textBaseline = 'middle';
-  gctx.fillText(obj.item.emoji, 0, 2);
+  gctx.fillText(obj.item.emoji, 0, 0);
 
   gctx.restore();
 }
