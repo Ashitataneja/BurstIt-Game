@@ -126,18 +126,14 @@ html, body {
 
 /* Target display */
 #target-box {
-  background:rgba(12,12,20,.82); backdrop-filter:blur(16px);
-  border:1.5px solid var(--border); border-radius:20px;
-  padding:10px 20px; display:flex; align-items:center; gap:10px;
-  animation:targetpulse 2s ease-in-out infinite;
+  background:rgba(12,12,20,.96); backdrop-filter:blur(16px);
+  border:2px solid rgba(167,139,250,.6); border-radius:20px;
+  padding:12px 24px; display:flex; align-items:center; gap:10px;
+  box-shadow:0 0 24px rgba(167,139,250,.2);
 }
-@keyframes targetpulse {
-  0%,100%{ border-color:rgba(255,255,255,.08); }
-  50%    { border-color:rgba(167,139,250,.4); box-shadow:0 0 20px rgba(167,139,250,.15); }
-}
-.target-label { font-size:.65rem; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); }
-.target-emoji { font-size:2rem; line-height:1; }
-.target-name  { font-family:var(--font-h); font-size:1rem; font-weight:700; color:var(--white); }
+.target-label { font-size:.65rem; letter-spacing:.18em; text-transform:uppercase; color:rgba(245,245,255,.7); }
+.target-emoji { font-size:3rem; line-height:1; }
+.target-name  { font-family:var(--font-h); font-size:1.1rem; font-weight:700; color:#fff; }
 
 /* Progress bar */
 #progress-wrap {
@@ -643,26 +639,28 @@ const HAND_CONNECTIONS = [
 
 function drawHandSkeleton(landmarks) {
   hctx.save();
-  // Draw connections
-  // Video has CSS transform:scaleX(-1), so landmarks x=0 is on the RIGHT of screen.
-  // We flip: screenX = (1 - lm.x) * width to match what the user sees.
+  // MediaPipe gives coords based on raw camera feed (unmirrored).
+  // Our video is CSS-mirrored (scaleX(-1)), so to draw the skeleton
+  // on top of what the user SEES, we must also flip X: screenX = (1 - lm.x) * width
+  // BUT the hand canvas has NO CSS transform, so we apply the flip in code here.
+  // This means right hand on screen right = landmarks x near 0 (raw) = flipped to right. ✓
   HAND_CONNECTIONS.forEach(([a,b]) => {
     const la = landmarks[a], lb = landmarks[b];
+    // Flip X to match mirrored video
     const ax = (1 - la.x) * handCanvas.width,  ay = la.y * handCanvas.height;
     const bx = (1 - lb.x) * handCanvas.width,  by = lb.y * handCanvas.height;
     hctx.beginPath();
     hctx.moveTo(ax, ay); hctx.lineTo(bx, by);
-    hctx.strokeStyle = 'rgba(167,139,250,.65)';
+    hctx.strokeStyle = 'rgba(167,139,250,.7)';
     hctx.lineWidth   = 2.5;
     hctx.stroke();
   });
-  // Draw landmark dots
   landmarks.forEach((lm, i) => {
     const x = (1 - lm.x) * handCanvas.width;
     const y = lm.y * handCanvas.height;
     hctx.beginPath();
     hctx.arc(x, y, i===4||i===8 ? 9 : 4, 0, Math.PI*2);
-    hctx.fillStyle = (i===4||i===8) ? '#f472b6' : 'rgba(255,255,255,.8)';
+    hctx.fillStyle = (i===4||i===8) ? '#f472b6' : 'rgba(255,255,255,.85)';
     hctx.fill();
   });
   hctx.restore();
@@ -792,7 +790,7 @@ function spawnObject() {
     x:        size/2 + Math.random() * (gameCanvas.width - size),
     y:        -size,                       // start above screen
     size,
-    vy:       (1.4 + Math.random() * 1.2) * state.speed, // base fall speed
+    vy:       (3.5 + Math.random() * 2.0) * state.speed, // faster fall speed
     vx:       (Math.random() - 0.5) * 0.8, // slight horizontal drift
     opacity:  1,
     scale:    1,
@@ -860,6 +858,8 @@ function gameLoop() {
 
   state.frameCount++;
   gctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+  // Always clear hand canvas every frame — prevents stale skeleton if hand leaves frame
+  hctx.clearRect(0, 0, handCanvas.width, handCanvas.height);
 
   // ── Speed escalation: every 600 frames (~10s) increase speed ──
   if (state.frameCount % 600 === 0) {
