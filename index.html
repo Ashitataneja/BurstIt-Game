@@ -263,7 +263,9 @@ html, body {
   padding:12px 36px; border-radius:50px; border:none; cursor:pointer;
   transition:all .18s;
 }
-.end-btn:hover { transform:scale(1.05); filter:brightness(1.1); }
+/* Win frame */
+#win-frame-overlay { gap:12px; }
+#win-frame-canvas  { border-radius:12px; max-width:90vw; max-height:70vh; box-shadow:0 0 60px rgba(167,139,250,.4); }
 .btn-primary { background:linear-gradient(135deg,var(--accent),#f472b6); color:#fff; }
 .btn-secondary { background:var(--surface); border:1px solid var(--border); color:var(--white); }
 
@@ -374,8 +376,9 @@ html, body {
 
   <!-- Bottom status -->
   <div id="bottom-bar">
-    <div class="status-chip" id="hand-status">✋ Looking for hand...</div>
+    <div class="status-chip" id="hand-status">✋ Show your hand</div>
     <div class="status-chip" id="level-chip">Speed ×1.0</div>
+    <div class="status-chip" id="gesture-chip">✊ Fist = Fast · 🖐 Palm = Slow</div>
   </div>
 </div>
 
@@ -389,16 +392,12 @@ html, body {
 <!-- Countdown -->
 <div id="countdown"><div id="countdown-num">3</div></div>
 
-<!-- Win overlay -->
-<div id="win-overlay" class="end-overlay">
-  <div class="end-title">You Win! 🎉</div>
-  <div class="end-score-row">
-    <div class="end-stat"><div class="end-stat-num" id="win-score">0</div><div class="end-stat-lbl">Score</div></div>
-    <div class="end-stat"><div class="end-stat-num" id="win-correct">0</div><div class="end-stat-lbl">Correct</div></div>
-    <div class="end-stat"><div class="end-stat-num" id="win-wrong">0</div><div class="end-stat-lbl">Wrong</div></div>
-  </div>
-  <div class="end-btns">
-    <button class="end-btn btn-primary" onclick="restartGame()">Play Again</button>
+<!-- Win frame overlay -->
+<div id="win-frame-overlay" class="end-overlay">
+  <canvas id="win-frame-canvas"></canvas>
+  <div class="end-btns" style="margin-top:16px">
+    <button class="end-btn btn-primary" onclick="downloadFrame()">💾 Save Photo</button>
+    <button class="end-btn btn-secondary" onclick="restartGame()">Play Again</button>
     <button class="end-btn btn-secondary" onclick="goHome()">Home</button>
   </div>
 </div>
