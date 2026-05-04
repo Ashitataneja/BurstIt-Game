@@ -476,7 +476,7 @@ let state = {
   running:      false,
   speed:        1.0,    // multiplier, increases over time
   spawnTimer:   0,
-  spawnRate:    80,     // frames between spawns
+  spawnRate:    30,     // frames between spawns — much faster
   frameCount:   0,
   handVisible:  false,
   pinchX:       0,
@@ -575,55 +575,89 @@ function setupMediaPipe(stream) {
 // ═══════════════════════════════════════════════════════
 //  HAND TRACKING RESULTS CALLBACK
 // ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+//  HAND TRACKING RESULTS CALLBACK
+// ═══════════════════════════════════════════════════════
+
+// Gesture state
+let gestureHoldFrames = 0;
+const GESTURE_HOLD = 8; // frames gesture must persist before triggering
+
 function onHandResults(results) {
-  // Clear hand overlay canvas
+  // Always clear hand canvas here (MediaPipe drives this, not gameLoop)
   hctx.clearRect(0, 0, handCanvas.width, handCanvas.height);
 
   if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
     state.handVisible = false;
+    state.lastPinch   = false;
     updateHandStatus(false);
     hidePinchCursor();
+    gestureHoldFrames = 0;
     return;
   }
 
   state.handVisible = true;
   updateHandStatus(true);
 
-  const landmarks = results.multiHandLandmarks[0];
+  const lm = results.multiHandLandmarks[0];
 
   // ── Draw skeleton ──
-  drawHandSkeleton(landmarks);
+  drawHandSkeleton(lm);
 
-  // ── Pinch detection ──
-  // Pinch = distance between THUMB_TIP (4) and INDEX_TIP (8) is small
-  const thumb = landmarks[4];
-  const index = landmarks[8];
+  // ── Pinch detection (THUMB_TIP=4, INDEX_TIP=8) ──
+  const tx = (1 - lm[4].x) * window.innerWidth;
+  const ty =      lm[4].y  * window.innerHeight;
+  const ix = (1 - lm[8].x) * window.innerWidth;
+  const iy =      lm[8].y  * window.innerHeight;
 
-  // Convert normalised coords → screen coords
-  // Note: video is mirrored, so we flip X (1 - x)
-  const tx = (1 - thumb.x) * window.innerWidth;
-  const ty = thumb.y  * window.innerHeight;
-  const ix = (1 - index.x) * window.innerWidth;
-  const iy = index.y  * window.innerHeight;
-
-  // Midpoint = pinch location
   state.pinchX = (tx + ix) / 2;
   state.pinchY = (ty + iy) / 2;
 
-  // Euclidean distance in screen space
-  const dist = Math.sqrt((tx-ix)**2 + (ty-iy)**2);
-  const PINCH_THRESHOLD = 50; // pixels — tune as needed
+  const pinchDist = Math.hypot(tx - ix, ty - iy);
+  state.isPinching = pinchDist < 50;
 
-  state.isPinching = dist < PINCH_THRESHOLD;
-
-  // Update custom cursor
   updatePinchCursor(state.pinchX, state.pinchY, state.isPinching);
 
-  // Pinch onset (newly pinched this frame)
   if (state.isPinching && !state.lastPinch && state.running) {
     handlePinch(state.pinchX, state.pinchY);
   }
   state.lastPinch = state.isPinching;
+
+  // ── Gesture detection (fist vs open palm) ──
+  // Uses finger curl: each finger tip should be ABOVE its MCP knuckle when open
+  // Landmarks: Index tip=8 MCP=5, Middle tip=12 MCP=9, Ring tip=16 MCP=13, Pinky tip=20 MCP=17
+  const fingerTips = [8, 12, 16, 20];
+  const fingerMCPs = [5,  9, 13, 17];
+
+  // A finger is "extended" if its tip y is ABOVE (less than) its MCP y (in image coords, y increases downward)
+  let extendedCount = 0;
+  fingerTips.forEach((tip, i) => {
+    if (lm[tip].y < lm[fingerMCPs[i]].y) extendedCount++;
+  });
+
+  // Also check thumb extension (tip x relative to IP joint, mirrored)
+  const thumbExtended = Math.abs(lm[4].x - lm[2].x) > 0.04;
+
+  const isOpenPalm = extendedCount >= 3;     // 3+ fingers open = palm
+  const isFist     = extendedCount <= 1;     // 0-1 fingers open = fist
+
+  gestureHoldFrames++;
+
+  if (gestureHoldFrames >= GESTURE_HOLD) {
+    if (isOpenPalm) {
+      // Palm = SLOW DOWN
+      state.speed = Math.max(0.5, state.speed - 0.15);
+      document.getElementById('level-chip').textContent = `🖐 Slow ×${state.speed.toFixed(1)}`;
+      gestureHoldFrames = 0;
+    } else if (isFist) {
+      // Fist = SPEED UP
+      state.speed = Math.min(4.0, state.speed + 0.2);
+      document.getElementById('level-chip').textContent = `✊ Fast ×${state.speed.toFixed(1)}`;
+      gestureHoldFrames = 0;
+    } else {
+      gestureHoldFrames = 0; // neutral — reset
+    }
+  }
 }
 
 // ── Draw a simple hand skeleton on the overlay canvas ──
@@ -857,8 +891,6 @@ function gameLoop() {
 
   state.frameCount++;
   gctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
-  // Always clear hand canvas every frame — prevents stale skeleton if hand leaves frame
-  hctx.clearRect(0, 0, handCanvas.width, handCanvas.height);
 
   // ── Speed escalation: every 600 frames (~10s) increase speed ──
   if (state.frameCount % 600 === 0) {
@@ -875,11 +907,12 @@ function gameLoop() {
     pickNewTarget();
   }
 
-  // ── Spawn objects ──
+  // ── Spawn objects — spawn 2-3 at a time for density ──
   state.spawnTimer--;
   if (state.spawnTimer <= 0) {
-    spawnObject();
-    state.spawnTimer = state.spawnRate + Math.floor(Math.random() * 20 - 10);
+    const batch = 2 + (Math.random() < 0.4 ? 1 : 0); // 2 or 3
+    for (let b = 0; b < batch; b++) spawnObject();
+    state.spawnTimer = state.spawnRate + Math.floor(Math.random() * 15 - 7);
   }
 
   // ── Update & draw objects ──
@@ -971,24 +1004,97 @@ function flashScreen(correct) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  GAME END
+//  GAME END + PHOTO FRAME
 // ═══════════════════════════════════════════════════════
 function endGame(win) {
   state.running = false;
 
   if (win) {
-    document.getElementById('win-score').textContent   = state.score;
-    document.getElementById('win-correct').textContent = state.correctCount;
-    document.getElementById('win-wrong').textContent   = state.wrongCount;
-    document.getElementById('win-overlay').classList.add('show');
+    setTimeout(() => buildWinFrame(), 300);
   } else {
     document.getElementById('lose-score').textContent = state.score;
     document.getElementById('lose-overlay').classList.add('show');
   }
 }
 
+function buildWinFrame() {
+  const fc   = document.getElementById('win-frame-canvas');
+  const fctx = fc.getContext('2d');
+  const W = 800, H = 800;
+  fc.width = W; fc.height = H;
+
+  const items   = CATEGORIES[state.category];
+  const border  = 72; // px border thickness
+  const emoji   = items.map(i => i.emoji);
+
+  // 1. Draw webcam snapshot as centre photo
+  fctx.save();
+  fctx.beginPath();
+  fctx.rect(border, border, W - border*2, H - border*2);
+  fctx.clip();
+  // Mirror the video to match what user sees
+  fctx.translate(W, 0); fctx.scale(-1, 1);
+  fctx.drawImage(videoEl, 0, 0, W, H);
+  fctx.restore();
+
+  // 2. Dark border band
+  fctx.fillStyle = '#0c0c14';
+  // top
+  fctx.fillRect(0, 0, W, border);
+  // bottom
+  fctx.fillRect(0, H - border, W, border);
+  // left
+  fctx.fillRect(0, 0, border, H);
+  // right
+  fctx.fillRect(W - border, 0, border, H);
+
+  // 3. Tile category emojis around the border
+  const emojiSize = 40;
+  fctx.font = `${emojiSize}px serif`;
+  fctx.textAlign    = 'center';
+  fctx.textBaseline = 'middle';
+
+  const step = border + 4;
+  let eIdx   = 0;
+  const next = () => { const e = emoji[eIdx % emoji.length]; eIdx++; return e; };
+
+  // Top row
+  for (let x = border/2; x < W; x += step) fctx.fillText(next(), x, border/2);
+  // Bottom row
+  for (let x = border/2; x < W; x += step) fctx.fillText(next(), x, H - border/2);
+  // Left column (skip corners)
+  for (let y = border + step/2; y < H - border; y += step) fctx.fillText(next(), border/2, y);
+  // Right column
+  for (let y = border + step/2; y < H - border; y += step) fctx.fillText(next(), W - border/2, y);
+
+  // 4. Glowing inner border line
+  fctx.strokeStyle = 'rgba(167,139,250,.7)';
+  fctx.lineWidth   = 3;
+  fctx.strokeRect(border, border, W - border*2, H - border*2);
+
+  // 5. Score text at bottom inside
+  fctx.fillStyle = 'rgba(12,12,20,.75)';
+  fctx.fillRect(border + 1, H - border - 48, W - border*2 - 2, 47);
+  fctx.fillStyle = '#fff';
+  fctx.font      = 'bold 22px sans-serif';
+  fctx.textAlign = 'center';
+  fctx.fillText(`Score: ${state.score}  ✓ ${state.correctCount}  ✗ ${state.wrongCount}`, W/2, H - border - 24);
+
+  document.getElementById('win-frame-overlay').classList.add('show');
+}
+
+let winFrameDataURL = '';
+function downloadFrame() {
+  const fc  = document.getElementById('win-frame-canvas');
+  const url = fc.toDataURL('image/png');
+  const a   = document.createElement('a');
+  a.href     = url;
+  a.download = 'pinchit-win.png';
+  a.click();
+}
+
 function restartGame() {
-  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('win-frame-overlay').classList.remove('show');
   document.getElementById('lose-overlay').classList.remove('show');
   startGame();
 }
